@@ -41,6 +41,7 @@ const elements = {
   phaseTitle: document.querySelector("#phaseTitle"),
   phaseDetail: document.querySelector("#phaseDetail"),
   startButton: document.querySelector("#startButton"),
+  voiceButton: document.querySelector("#voiceButton"),
   pauseButton: document.querySelector("#pauseButton"),
   stopButton: document.querySelector("#stopButton"),
 };
@@ -54,6 +55,9 @@ let pausedAt = 0;
 let timerId = null;
 let isRunning = false;
 let wakeLock = null;
+let audioContext = null;
+let audioReady = false;
+let lastCountdownSecond = null;
 
 function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -62,11 +66,109 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
-function speak(text) {
+function getVoices() {
+  if (!("speechSynthesis" in window)) return Promise.resolve([]);
+
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) return Promise.resolve(voices);
+
+  return new Promise((resolve) => {
+    const timeoutId = window.setTimeout(() => resolve(window.speechSynthesis.getVoices()), 600);
+
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.clearTimeout(timeoutId);
+      resolve(window.speechSynthesis.getVoices());
+    };
+  });
+}
+
+async function unlockAudio() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+
+  audioContext ||= new AudioContext();
+
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+
+  audioReady = true;
+}
+
+function playChime() {
+  if (!audioContext || !audioReady) return;
+
+  const now = audioContext.currentTime;
+  const gain = audioContext.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+  gain.connect(audioContext.destination);
+
+  [660, 880].forEach((frequency, index) => {
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, now + index * 0.12);
+    oscillator.connect(gain);
+    oscillator.start(now + index * 0.12);
+    oscillator.stop(now + index * 0.12 + 0.28);
+  });
+}
+
+function playCountdownBeep(second) {
+  if (!audioContext || !audioReady) return;
+
+  const now = audioContext.currentTime;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const frequency = second === 1 ? 1046 : 784;
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.18);
+}
+
+function vibrateCue() {
+  if ("vibrate" in navigator) {
+    navigator.vibrate([180, 80, 180]);
+  }
+}
+
+function cueCountdownBeep(phase, remaining) {
+  if (phase.duration === null || remaining > 5 || remaining <= 0) {
+    lastCountdownSecond = null;
+    return;
+  }
+
+  const countdownSecond = Math.ceil(remaining);
+  if (countdownSecond === lastCountdownSecond) return;
+
+  lastCountdownSecond = countdownSecond;
+  playCountdownBeep(countdownSecond);
+}
+
+async function speak(text) {
+  await unlockAudio();
+  playChime();
+  vibrateCue();
+
   if (!("speechSynthesis" in window)) return;
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
+  const voices = await getVoices();
+  const preferredVoice = voices.find((voice) => voice.lang === "en-US") || voices.find((voice) => voice.lang.startsWith("en"));
+  if (preferredVoice) utterance.voice = preferredVoice;
+
+  utterance.lang = preferredVoice?.lang || "en-US";
+  utterance.volume = 1;
   utterance.rate = 0.95;
   utterance.pitch = 1;
   window.speechSynthesis.speak(utterance);
@@ -144,6 +246,7 @@ function advancePhase() {
   currentPhaseIndex += 1;
   phaseStartedAt = Date.now();
   phasePausedRemaining = phases[currentPhaseIndex].duration;
+  lastCountdownSecond = null;
   speak(phases[currentPhaseIndex].spoken);
   render();
 }
@@ -157,17 +260,21 @@ function tick() {
   if (phase.duration !== null && remaining <= 0) {
     advancePhase();
   } else {
+    cueCountdownBeep(phase, remaining);
     render();
   }
 }
 
 async function startWorkout() {
+  await unlockAudio();
+
   currentPhaseIndex = 0;
   workoutStartedAt = Date.now();
   phaseStartedAt = workoutStartedAt;
   phasePausedRemaining = phases[0].duration;
   pausedTotal = 0;
   pausedAt = 0;
+  lastCountdownSecond = null;
   isRunning = true;
 
   elements.startButton.disabled = true;
@@ -181,12 +288,21 @@ async function startWorkout() {
   timerId = window.setInterval(tick, 250);
 }
 
+async function testVoice() {
+  elements.voiceButton.disabled = true;
+  await speak("Voice is ready");
+  window.setTimeout(() => {
+    elements.voiceButton.disabled = false;
+  }, 900);
+}
+
 function pauseWorkout() {
   if (!isRunning) {
     isRunning = true;
     pausedTotal += Date.now() - pausedAt;
     pausedAt = 0;
     phaseStartedAt = Date.now();
+    lastCountdownSecond = null;
     elements.pauseButton.textContent = "Pause";
     requestWakeLock();
     timerId = window.setInterval(tick, 250);
@@ -216,6 +332,7 @@ function stopWorkout() {
   pausedAt = 0;
   timerId = null;
   isRunning = false;
+  lastCountdownSecond = null;
 
   elements.startButton.disabled = false;
   elements.pauseButton.disabled = true;
@@ -232,6 +349,7 @@ function stopWorkout() {
 }
 
 elements.startButton.addEventListener("click", startWorkout);
+elements.voiceButton.addEventListener("click", testVoice);
 elements.pauseButton.addEventListener("click", pauseWorkout);
 elements.stopButton.addEventListener("click", stopWorkout);
 
