@@ -166,6 +166,225 @@ p {
   border-color: var(--line);
 }
 
+.voice-button {
+  grid-column: 1 / -1;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.is-brisk {
+  --accent: var(--brisk);
+}
+
+.is-casual {
+  --accent: var(--casual);
+}
+
+.is-warmup {
+  --accent: var(--warm);
+}
+
+.is-cooldown {
+  --accent: var(--cool);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111714;
+    --ink: #eef7f2;
+    --muted: #b6c3bd;
+    --panel: #17231f;
+    --line: rgba(238, 247, 242, 0.16);
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 20% 16%, rgba(45, 212, 191, 0.12), transparent 24rem),
+      linear-gradient(135deg, #111714 0%, #17231f 55%, #251d18 100%);
+  }
+
+  .phase-badge,
+  .elapsed-time,
+  .secondary-button {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .progress-core {
+    background: linear-gradient(180deg, rgba(28, 39, 35, 0.96), rgba(18, 27, 24, 0.98));
+  }
+}
+:root {
+  color-scheme: light dark;
+  --bg: #f7f2e8;
+  --ink: #17231f;
+  --muted: #5f6c66;
+  --panel: #fffaf0;
+  --line: rgba(23, 35, 31, 0.14);
+  --accent: #0f766e;
+  --accent-ink: #ffffff;
+  --brisk: #d9480f;
+  --casual: #2563eb;
+  --warm: #8b5cf6;
+  --cool: #15803d;
+  --shadow: 0 18px 50px rgba(31, 41, 35, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(15, 118, 110, 0.15), transparent 24rem),
+    linear-gradient(135deg, #f7f2e8 0%, #e8f2ef 55%, #f8ede2 100%);
+  color: var(--ink);
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+.timer-panel {
+  width: min(100%, 460px);
+  min-height: min(720px, calc(100svh - 44px));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.phase-badge,
+.elapsed-time {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.42);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.progress-wrap {
+  display: grid;
+  place-items: center;
+  padding: 10px 0 2px;
+}
+
+.progress-ring {
+  width: min(76vw, 320px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) 0deg, rgba(15, 118, 110, 0.16) 0deg);
+  transition: background 250ms ease;
+}
+
+.progress-core {
+  width: 76%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border-radius: 50%;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 250, 240, 0.94)),
+    var(--panel);
+  box-shadow: inset 0 0 0 1px rgba(23, 35, 31, 0.08);
+  text-align: center;
+}
+
+.time-remaining {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(3rem, 18vw, 5.8rem);
+  font-weight: 850;
+  line-height: 0.92;
+}
+
+.phase-count {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 10vw, 3.4rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+p {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.4;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 56px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 14px 16px;
+  font-weight: 850;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.primary-button {
+  grid-column: 1 / -1;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.secondary-button {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.52);
+  border-color: var(--line);
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
