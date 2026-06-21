@@ -1,4 +1,4 @@
-const CACHE_NAME = "japanese-walking-timer-v1";
+const CACHE_NAME = "japanese-walking-timer-v3";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -29,3 +29,4 @@ self.addEventListener("fetch", (event) => {
     )
   );
 });
+
