@@ -38,8 +38,11 @@ button {
 
 .app-shell {
   min-height: 100svh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
   padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 
@@ -56,6 +59,15 @@ button {
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+}
+
+#routineAudio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .status-row {
@@ -175,6 +187,126 @@ button:disabled {
   opacity: 0.45;
 }
 
+.history-panel {
+  width: min(100%, 460px);
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.history-heading,
+.calendar-month-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.35rem;
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+.month-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.month-controls button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.52);
+  font-size: 1.15rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.calendar-month-row {
+  margin: 22px 0 12px;
+}
+
+#calendarSummary {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.calendar-weekday {
+  padding: 3px 0 7px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.calendar-day {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  font-size: 0.84rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-day.is-today {
+  border-color: var(--accent);
+}
+
+.calendar-day.is-complete {
+  color: #fff;
+  background: var(--accent);
+  font-weight: 850;
+}
+
+.calendar-day.is-complete::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.history-note {
+  margin: 16px 0 0;
+  font-size: 0.84rem;
+}
+
 .is-brisk {
   --accent: var(--brisk);
 }
@@ -209,7 +341,8 @@ button:disabled {
 
   .phase-badge,
   .elapsed-time,
-  .secondary-button {
+  .secondary-button,
+  .month-controls button {
     background: rgba(255, 255, 255, 0.08);
   }
 

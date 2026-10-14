@@ -1,0 +1,10 @@
+{
+  "name": "japanese-walking-timer",
+  "private": true,
+  "scripts": {
+    "generate-audio": "node scripts/generate-routine-audio.mjs"
+  },
+  "devDependencies": {
+    "text2wav": "0.0.14"
+  }
+}

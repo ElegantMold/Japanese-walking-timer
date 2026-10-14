@@ -27,7 +27,18 @@ Then open `http://localhost:4173` on your Mac, or open the Mac's local network a
 3. Tap Add to Home Screen.
 4. Start it from the new home screen icon.
 
-Keep the phone volume on and use the Test Voice button before starting. Chrome on iPhone can be unreliable with browser-generated speech, so the app also plays a chime and asks the phone to vibrate at each transition as a backup cue. Each timed segment also beeps during its final 5 seconds.
+Keep the phone volume on and use the Test Guidance button before starting. The routine plays as a continuous guidance track, so its final-five-second beeps and spoken interval directions continue when an iPhone screen is locked. Lock-screen media controls can pause and resume the routine.
+
+Finishing all 35 scheduled minutes automatically marks that date on the in-app walking calendar. History is stored locally on the device.
+
+## Regenerate The Guidance Track
+
+The deployed `routine-guidance-compact.wav` is a 4000 Hz PCM copy for smaller download size. The generator creates the 8000 Hz source `routine-guidance.wav`; downsample a copy for deployment. It can be regenerated after changing the routine timing or prompts:
+
+```sh
+npm install
+npm run generate-audio
+```
 
 ## Publish With GitHub Pages
 

@@ -1,14 +1,15 @@
 const WARMUP_SECONDS = 5 * 60;
 const WALK_SECONDS = 3 * 60;
 const INTERVAL_COUNT = 10;
+const HISTORY_KEY = "japanese-walking-completions-v1";
 
 const phases = [
   {
     id: "warmup",
     label: "Warmup",
     title: "Start 5 minute warmup",
-    spoken: "Start 5 minute warmup",
     duration: WARMUP_SECONDS,
+    start: 0,
   },
   ...Array.from({ length: INTERVAL_COUNT }, (_, index) => {
     const isBrisk = index % 2 === 0;
@@ -16,20 +17,20 @@ const phases = [
       id: isBrisk ? "brisk" : "casual",
       label: isBrisk ? "Brisk" : "Casual",
       title: isBrisk ? "Walk Briskly" : "Walk Casually",
-      spoken: isBrisk ? "Walk Briskly" : "Walk Casually",
       duration: WALK_SECONDS,
+      start: WARMUP_SECONDS + index * WALK_SECONDS,
     };
   }),
   {
     id: "cooldown",
     label: "Cooldown",
     title: "Start Cooldown",
-    spoken: "Start Cooldown",
     duration: null,
+    start: WARMUP_SECONDS + WALK_SECONDS * INTERVAL_COUNT,
   },
 ];
 
-const totalScheduledSeconds = WARMUP_SECONDS + WALK_SECONDS * INTERVAL_COUNT;
+const totalScheduledSeconds = phases.at(-1).start;
 
 const elements = {
   panel: document.querySelector(".timer-panel"),
@@ -44,20 +45,24 @@ const elements = {
   voiceButton: document.querySelector("#voiceButton"),
   pauseButton: document.querySelector("#pauseButton"),
   stopButton: document.querySelector("#stopButton"),
+  routineAudio: document.querySelector("#routineAudio"),
+  calendarTitle: document.querySelector("#calendarTitle"),
+  calendarGrid: document.querySelector("#calendarGrid"),
+  calendarSummary: document.querySelector("#calendarSummary"),
+  previousMonth: document.querySelector("#previousMonth"),
+  nextMonth: document.querySelector("#nextMonth"),
 };
 
-let currentPhaseIndex = 0;
-let phaseStartedAt = 0;
-let phasePausedRemaining = phases[0].duration;
 let workoutStartedAt = 0;
 let pausedTotal = 0;
 let pausedAt = 0;
 let timerId = null;
-let isRunning = false;
-let wakeLock = null;
-let audioContext = null;
-let audioReady = false;
-let lastCountdownSecond = null;
+let workoutActive = false;
+let isPaused = false;
+let completionRecorded = false;
+let guidanceError = false;
+let displayedMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let completedDates = loadCompletedDates();
 
 function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -66,145 +71,46 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
-function getVoices() {
-  if (!("speechSynthesis" in window)) return Promise.resolve([]);
-
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length) return Promise.resolve(voices);
-
-  return new Promise((resolve) => {
-    const timeoutId = window.setTimeout(() => resolve(window.speechSynthesis.getVoices()), 600);
-
-    window.speechSynthesis.onvoiceschanged = () => {
-      window.clearTimeout(timeoutId);
-      resolve(window.speechSynthesis.getVoices());
-    };
-  });
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-async function unlockAudio() {
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
-
-  audioContext ||= new AudioContext();
-
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
-
-  audioReady = true;
+function dateFromKey(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function playChime() {
-  if (!audioContext || !audioReady) return;
-
-  const now = audioContext.currentTime;
-  const gain = audioContext.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-  gain.connect(audioContext.destination);
-
-  [660, 880].forEach((frequency, index) => {
-    const oscillator = audioContext.createOscillator();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, now + index * 0.12);
-    oscillator.connect(gain);
-    oscillator.start(now + index * 0.12);
-    oscillator.stop(now + index * 0.12 + 0.28);
-  });
-}
-
-function playCountdownBeep(second) {
-  if (!audioContext || !audioReady) return;
-
-  const now = audioContext.currentTime;
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  const frequency = second === 1 ? 1046 : 784;
-
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(frequency, now);
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start(now);
-  oscillator.stop(now + 0.18);
-}
-
-function vibrateCue() {
-  if ("vibrate" in navigator) {
-    navigator.vibrate([180, 80, 180]);
-  }
-}
-
-function cueCountdownBeep(phase, remaining) {
-  if (phase.duration === null || remaining > 5 || remaining <= 0) {
-    lastCountdownSecond = null;
-    return;
-  }
-
-  const countdownSecond = Math.ceil(remaining);
-  if (countdownSecond === lastCountdownSecond) return;
-
-  lastCountdownSecond = countdownSecond;
-  playCountdownBeep(countdownSecond);
-}
-
-async function speak(text) {
-  await unlockAudio();
-  vibrateCue();
-
-  playChime();
-
-  if (!("speechSynthesis" in window)) return;
-
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  const voices = await getVoices();
-  const preferredVoice = voices.find((voice) => voice.lang === "en-US") || voices.find((voice) => voice.lang.startsWith("en"));
-  if (preferredVoice) utterance.voice = preferredVoice;
-
-  utterance.lang = preferredVoice?.lang || "en-US";
-  utterance.volume = 1;
-  utterance.rate = 0.95;
-  utterance.pitch = 1;
-  window.speechSynthesis.speak(utterance);
-}
-
-async function requestWakeLock() {
-  if (!("wakeLock" in navigator)) return;
-
+function loadCompletedDates() {
   try {
-    wakeLock = await navigator.wakeLock.request("screen");
+    const stored = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    return new Set(Array.isArray(stored) ? stored : []);
   } catch {
-    wakeLock = null;
+    return new Set();
   }
 }
 
-async function releaseWakeLock() {
-  if (!wakeLock) return;
-
+function saveCompletedDates() {
   try {
-    await wakeLock.release();
-  } finally {
-    wakeLock = null;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify([...completedDates].sort()));
+  } catch {
+    // The timer still works if private browsing prevents local storage.
   }
-}
-
-function getPhaseRemaining(now = Date.now()) {
-  const phase = phases[currentPhaseIndex];
-  if (phase.duration === null) return null;
-  return phasePausedRemaining - (now - phaseStartedAt) / 1000;
 }
 
 function getWorkoutElapsed(now = Date.now()) {
   if (!workoutStartedAt) return 0;
-  const activePausedTime = pausedAt ? now - pausedAt : 0;
-  return (now - workoutStartedAt - pausedTotal - activePausedTime) / 1000;
+  const effectiveNow = pausedAt || now;
+  return Math.max(0, (effectiveNow - workoutStartedAt - pausedTotal) / 1000);
+}
+
+function getPhaseIndex(elapsed) {
+  for (let index = phases.length - 1; index >= 0; index -= 1) {
+    if (elapsed >= phases[index].start) return index;
+  }
+  return 0;
 }
 
 function setPhaseClasses(phase) {
@@ -212,158 +118,314 @@ function setPhaseClasses(phase) {
   elements.panel.classList.add(`is-${phase.id}`);
 }
 
-function render() {
-  const phase = phases[currentPhaseIndex];
-  const now = Date.now();
-  const elapsed = getWorkoutElapsed(now);
-  const remaining = getPhaseRemaining(now);
+function recordCompletion() {
+  if (completionRecorded) return;
+  completionRecorded = true;
+
+  const completedAt = new Date(workoutStartedAt + pausedTotal + totalScheduledSeconds * 1000);
+  completedDates.add(localDateKey(completedAt));
+  saveCompletedDates();
+  renderCalendar();
+}
+
+function updateMediaPosition() {
+  if (!("mediaSession" in navigator) || !Number.isFinite(elements.routineAudio.duration)) return;
+
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: elements.routineAudio.duration,
+      playbackRate: elements.routineAudio.playbackRate,
+      position: Math.min(elements.routineAudio.currentTime, elements.routineAudio.duration),
+    });
+  } catch {
+    // Position controls are optional and vary between browsers.
+  }
+}
+
+function renderTimer() {
+  if (!workoutActive) return;
+
+  const elapsed = getWorkoutElapsed();
+  const phaseIndex = getPhaseIndex(elapsed);
+  const phase = phases[phaseIndex];
+  const remaining = phase.duration === null ? null : phase.duration - (elapsed - phase.start);
+
+  if (elapsed >= totalScheduledSeconds) recordCompletion();
 
   setPhaseClasses(phase);
-  elements.phaseBadge.textContent = phase.label;
+  elements.phaseBadge.textContent = isPaused ? "Paused" : phase.label;
   elements.elapsedTime.textContent = formatTime(elapsed);
   elements.phaseTitle.textContent = phase.title;
 
   if (phase.duration === null) {
     elements.timeRemaining.textContent = formatTime(elapsed - totalScheduledSeconds);
-    elements.phaseCount.textContent = "Cooldown";
-    elements.phaseDetail.textContent = "Cool down as long as you like. Stop the timer when you are finished.";
+    elements.phaseCount.textContent = "Routine complete";
+    elements.phaseDetail.textContent = "Today is marked complete. Cool down as long as you like, then tap Stop.";
     elements.progressRing.style.background = "conic-gradient(var(--accent) 360deg, rgba(15, 118, 110, 0.16) 0deg)";
-    return;
-  }
-
-  const completedRatio = Math.min(1, Math.max(0, 1 - remaining / phase.duration));
-  const degrees = Math.round(completedRatio * 360);
-  const walkNumber = Math.min(INTERVAL_COUNT, Math.max(1, currentPhaseIndex));
-
-  elements.timeRemaining.textContent = formatTime(remaining);
-  elements.phaseCount.textContent = currentPhaseIndex === 0 ? "Warmup" : `${walkNumber} of ${INTERVAL_COUNT}`;
-  elements.phaseDetail.textContent = currentPhaseIndex === 0
-    ? "Ease into your walk before the first brisk interval."
-    : "Follow the spoken prompt when the next interval begins.";
-  elements.progressRing.style.background = `conic-gradient(var(--accent) ${degrees}deg, rgba(15, 118, 110, 0.16) ${degrees}deg)`;
-}
-
-function advancePhase() {
-  currentPhaseIndex += 1;
-  phaseStartedAt = Date.now();
-  const phase = phases[currentPhaseIndex];
-  phasePausedRemaining = phase.duration;
-  lastCountdownSecond = null;
-  speak(phase.spoken);
-  render();
-}
-
-function tick() {
-  if (!isRunning) return;
-
-  const phase = phases[currentPhaseIndex];
-  const remaining = getPhaseRemaining();
-
-  if (phase.duration !== null && remaining <= 0) {
-    advancePhase();
   } else {
-    cueCountdownBeep(phase, remaining);
-    render();
+    const completedRatio = Math.min(1, Math.max(0, 1 - remaining / phase.duration));
+    const degrees = Math.round(completedRatio * 360);
+    const walkNumber = Math.min(INTERVAL_COUNT, Math.max(1, phaseIndex));
+
+    elements.timeRemaining.textContent = formatTime(remaining);
+    elements.phaseCount.textContent = phaseIndex === 0 ? "Warmup" : `${walkNumber} of ${INTERVAL_COUNT}`;
+    elements.phaseDetail.textContent = guidanceError
+      ? "Guidance is blocked. Check your volume, then tap Resume to try again."
+      : isPaused
+        ? "Your routine and background guidance are paused."
+      : phaseIndex === 0
+        ? "You can lock your screen; guidance will continue playing."
+        : "Listen for the countdown and the next walking direction.";
+    elements.progressRing.style.background = `conic-gradient(var(--accent) ${degrees}deg, rgba(15, 118, 110, 0.16) ${degrees}deg)`;
   }
+
+  updateMediaPosition();
+}
+
+function startTicker() {
+  window.clearInterval(timerId);
+  timerId = window.setInterval(renderTimer, 250);
 }
 
 async function startWorkout() {
-  await unlockAudio();
-
-  currentPhaseIndex = 0;
   workoutStartedAt = Date.now();
-  phaseStartedAt = workoutStartedAt;
-  phasePausedRemaining = phases[0].duration;
   pausedTotal = 0;
   pausedAt = 0;
-  lastCountdownSecond = null;
-  isRunning = true;
+  workoutActive = true;
+  isPaused = false;
+  completionRecorded = false;
+  guidanceError = false;
 
+  elements.routineAudio.currentTime = 0;
   elements.startButton.disabled = true;
+  elements.voiceButton.disabled = true;
   elements.pauseButton.disabled = false;
   elements.pauseButton.textContent = "Pause";
   elements.stopButton.disabled = false;
 
-  await requestWakeLock();
-  speak(phases[0].spoken);
-  render();
-  timerId = window.setInterval(tick, 250);
+  try {
+    await elements.routineAudio.play();
+  } catch {
+    guidanceError = true;
+    isPaused = true;
+    pausedAt = Date.now();
+    elements.pauseButton.textContent = "Resume";
+  }
+
+  renderTimer();
+  if (!isPaused) startTicker();
 }
 
-async function testVoice() {
-  elements.voiceButton.disabled = true;
-  await speak("Voice is ready");
-  window.setTimeout(() => {
-    elements.voiceButton.disabled = false;
-  }, 900);
+async function resumeWorkout() {
+  if (!workoutActive || !isPaused) return;
+
+  pausedTotal += Date.now() - pausedAt;
+  pausedAt = 0;
+  isPaused = false;
+  elements.pauseButton.textContent = "Pause";
+
+  try {
+    await elements.routineAudio.play();
+    guidanceError = false;
+  } catch {
+    guidanceError = true;
+    isPaused = true;
+    pausedAt = Date.now();
+    elements.pauseButton.textContent = "Resume";
+  }
+
+  renderTimer();
+  if (!isPaused) startTicker();
 }
 
 function pauseWorkout() {
-  if (!isRunning) {
-    isRunning = true;
-    pausedTotal += Date.now() - pausedAt;
-    pausedAt = 0;
-    phaseStartedAt = Date.now();
-    lastCountdownSecond = null;
-    elements.pauseButton.textContent = "Pause";
-    requestWakeLock();
-    timerId = window.setInterval(tick, 250);
-    render();
+  if (!workoutActive || isPaused) {
+    resumeWorkout();
     return;
   }
 
-  isRunning = false;
+  isPaused = true;
   pausedAt = Date.now();
-  phasePausedRemaining = getPhaseRemaining(pausedAt);
-  window.clearInterval(timerId);
+  elements.routineAudio.pause();
   elements.pauseButton.textContent = "Resume";
-  releaseWakeLock();
-  render();
+  window.clearInterval(timerId);
+  renderTimer();
 }
 
-function stopWorkout() {
-  window.clearInterval(timerId);
-  window.speechSynthesis?.cancel();
-  releaseWakeLock();
-
-  currentPhaseIndex = 0;
-  phaseStartedAt = 0;
-  phasePausedRemaining = phases[0].duration;
-  workoutStartedAt = 0;
-  pausedTotal = 0;
-  pausedAt = 0;
-  timerId = null;
-  isRunning = false;
-  lastCountdownSecond = null;
-
-  elements.startButton.disabled = false;
-  elements.pauseButton.disabled = true;
-  elements.pauseButton.textContent = "Pause";
-  elements.stopButton.disabled = true;
+function resetTimerDisplay() {
   elements.phaseBadge.textContent = "Ready";
   elements.elapsedTime.textContent = "00:00";
   elements.phaseTitle.textContent = "Japanese Walking Method";
-  elements.phaseDetail.textContent = "Start when you are ready. Keep your phone awake and volume on for spoken guidance.";
+  elements.phaseDetail.textContent = "Start when you are ready. Volume on; locking your screen is okay.";
   elements.timeRemaining.textContent = formatTime(totalScheduledSeconds);
   elements.phaseCount.textContent = "Warmup + 30 min";
   elements.progressRing.style.background = "conic-gradient(var(--accent) 0deg, rgba(15, 118, 110, 0.16) 0deg)";
   elements.panel.classList.remove("is-warmup", "is-brisk", "is-casual", "is-cooldown");
 }
 
+function stopWorkout() {
+  window.clearInterval(timerId);
+  elements.routineAudio.pause();
+  elements.routineAudio.currentTime = 0;
+
+  workoutStartedAt = 0;
+  pausedTotal = 0;
+  pausedAt = 0;
+  timerId = null;
+  workoutActive = false;
+  isPaused = false;
+  completionRecorded = false;
+  guidanceError = false;
+
+  elements.startButton.disabled = false;
+  elements.voiceButton.disabled = false;
+  elements.pauseButton.disabled = true;
+  elements.pauseButton.textContent = "Pause";
+  elements.stopButton.disabled = true;
+  resetTimerDisplay();
+}
+
+async function testVoice() {
+  elements.voiceButton.disabled = true;
+  elements.routineAudio.currentTime = 0;
+
+  try {
+    await elements.routineAudio.play();
+    window.setTimeout(() => {
+      elements.routineAudio.pause();
+      elements.routineAudio.currentTime = 0;
+    }, 2600);
+  } catch {
+    elements.phaseDetail.textContent = "Guidance audio is blocked. Check that your phone is not muted, then try again.";
+  }
+
+  window.setTimeout(() => {
+    elements.voiceButton.disabled = false;
+  }, 2800);
+}
+
+function calculateStreak() {
+  if (!completedDates.size) return 0;
+
+  const latest = [...completedDates].sort().at(-1);
+  const cursor = dateFromKey(latest);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysSinceLatest = Math.round((today - cursor) / 86400000);
+  if (daysSinceLatest > 1) return 0;
+
+  let streak = 0;
+  while (completedDates.has(localDateKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function renderCalendar() {
+  const year = displayedMonth.getFullYear();
+  const month = displayedMonth.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = localDateKey(new Date());
+
+  elements.calendarTitle.textContent = new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(displayedMonth);
+  elements.calendarGrid.replaceChildren();
+
+  for (const dayName of ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]) {
+    const heading = document.createElement("span");
+    heading.className = "calendar-weekday";
+    heading.textContent = dayName;
+    elements.calendarGrid.append(heading);
+  }
+
+  for (let index = 0; index < firstWeekday; index += 1) {
+    const spacer = document.createElement("span");
+    spacer.className = "calendar-day is-empty";
+    elements.calendarGrid.append(spacer);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+    const key = localDateKey(date);
+    const cell = document.createElement("time");
+    cell.className = "calendar-day";
+    cell.dateTime = key;
+    cell.textContent = String(day);
+
+    if (key === todayKey) cell.classList.add("is-today");
+    if (completedDates.has(key)) {
+      cell.classList.add("is-complete");
+      cell.setAttribute("aria-label", `${date.toLocaleDateString()} — routine completed`);
+    }
+    elements.calendarGrid.append(cell);
+  }
+
+  const total = completedDates.size;
+  const streak = calculateStreak();
+  elements.calendarSummary.textContent = `${total} completed ${total === 1 ? "day" : "days"} · ${streak} day streak`;
+}
+
+function changeMonth(offset) {
+  displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() + offset, 1);
+  renderCalendar();
+}
+
 elements.startButton.addEventListener("click", startWorkout);
 elements.voiceButton.addEventListener("click", testVoice);
 elements.pauseButton.addEventListener("click", pauseWorkout);
 elements.stopButton.addEventListener("click", stopWorkout);
+elements.previousMonth.addEventListener("click", () => changeMonth(-1));
+elements.nextMonth.addEventListener("click", () => changeMonth(1));
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && isRunning) {
-    requestWakeLock();
-    tick();
-  }
+  if (document.visibilityState === "visible" && workoutActive) renderTimer();
 });
+
+elements.routineAudio.addEventListener("ended", renderTimer);
+elements.routineAudio.addEventListener("pause", () => {
+  if (!workoutActive || isPaused || elements.routineAudio.ended) return;
+  isPaused = true;
+  pausedAt = Date.now();
+  elements.pauseButton.textContent = "Resume";
+  window.clearInterval(timerId);
+  renderTimer();
+});
+elements.routineAudio.addEventListener("play", () => {
+  if (workoutActive && isPaused) resumeWorkout();
+});
+
+if ("mediaSession" in navigator && "MediaMetadata" in window) {
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: "Japanese Walking Routine",
+    artist: "35 minute guided walk",
+  });
+  for (const [action, handler] of [
+    ["play", resumeWorkout],
+    ["pause", pauseWorkout],
+    ["stop", stopWorkout],
+  ]) {
+    try {
+      navigator.mediaSession.setActionHandler(action, handler);
+    } catch {
+      // Some browsers expose Media Session with only a subset of actions.
+    }
+  }
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("service-worker.js");
   });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (sessionStorage.getItem("walking-app-updated")) return;
+    sessionStorage.setItem("walking-app-updated", "true");
+    window.location.reload();
+  });
 }
+
+renderCalendar();

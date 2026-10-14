@@ -26,14 +26,35 @@
         </div>
 
         <h1 id="phaseTitle">Japanese Walking Method</h1>
-        <p id="phaseDetail">Start when you are ready. Keep your phone awake and volume on for spoken guidance.</p>
+        <p id="phaseDetail">Start when you are ready. Volume on; locking your screen is okay.</p>
 
         <div class="controls" role="group" aria-label="Timer controls">
           <button id="startButton" class="primary-button" type="button">Start</button>
-          <button id="voiceButton" class="secondary-button voice-button" type="button">Test Voice</button>
+          <button id="voiceButton" class="secondary-button voice-button" type="button">Test Guidance</button>
           <button id="pauseButton" class="secondary-button" type="button" disabled>Pause</button>
           <button id="stopButton" class="secondary-button" type="button" disabled>Stop</button>
         </div>
+
+        <audio id="routineAudio" src="routine-guidance-compact.wav" preload="auto" playsinline></audio>
+      </section>
+
+      <section class="history-panel" aria-labelledby="historyTitle">
+        <div class="history-heading">
+          <div>
+            <p class="eyebrow">Routine history</p>
+            <h2 id="historyTitle">Your walking calendar</h2>
+          </div>
+          <div class="month-controls">
+            <button id="previousMonth" type="button" aria-label="Previous month">←</button>
+            <button id="nextMonth" type="button" aria-label="Next month">→</button>
+          </div>
+        </div>
+        <div class="calendar-month-row">
+          <h3 id="calendarTitle"></h3>
+          <span id="calendarSummary"></span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid" aria-label="Completed walking days"></div>
+        <p class="history-note">A day is marked when all 35 scheduled minutes are complete. History stays on this device.</p>
       </section>
     </main>
 
