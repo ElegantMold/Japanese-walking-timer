@@ -33,12 +33,7 @@ Finishing all 35 scheduled minutes automatically marks that date on the in-app w
 
 ## Regenerate The Guidance Track
 
-The deployed `routine-guidance-compact.wav` is a 4000 Hz PCM copy for smaller download size. The generator creates the 8000 Hz source `routine-guidance.wav`; downsample a copy for deployment. It can be regenerated after changing the routine timing or prompts:
-
-```sh
-npm install
-npm run generate-audio
-```
+The deployed `routine-guidance-samantha-v12.m4a` uses the Mac's Samantha voice at 22.05 kHz, encoded as AAC-LC. Test Guidance and the workout play the same recording. Use `scripts/generate-clear-audio.py` on macOS to regenerate it with native `say` and `afconvert`; copy the resulting M4A from `clear-audio/` to the app root. No FFmpeg installation is required.
 
 ## Publish With GitHub Pages
 

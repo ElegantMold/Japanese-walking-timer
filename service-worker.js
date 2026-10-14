@@ -1,4 +1,4 @@
-const CACHE_NAME = "japanese-walking-timer-v11";
+const CACHE_NAME = "japanese-walking-timer-v12";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -7,7 +7,7 @@ const APP_FILES = [
   "./service-worker.js",
   "./manifest.webmanifest",
   "./icon.svg",
-  "./routine-guidance-compact.wav",
+  "./routine-guidance-samantha-v12.m4a",
 ];
 
 self.addEventListener("install", (event) => {
