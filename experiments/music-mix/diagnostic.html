@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M2 audio diagnostic</title>
+<body><h1>23-second audio check — M2</h1><p>This does not record a walk or change calendar data. Expect warmup now, brisk at 10 seconds, casual at 20 seconds, with five beeps before each change.</p>
+<p>Start music first. Choose Ambient mixing to reproduce the experiment, or Browser default as a comparison (it may stop the music). Keep the screen on for the first test; test locked playback only if that passes.</p>
+<label>Audio behavior <select id="mode"><option value="ambient">Ambient mixing</option><option value="auto">Browser default</option></select></label>
+<button id="start">Start 23-second check</button><button id="stop">Stop</button>
+<audio id="audio" src="diagnostic-23s.wav" preload="auto" playsinline></audio>
+<p id="status" role="status">Ready</p><pre id="log" style="white-space:pre-wrap"></pre><script src="diagnostic.js"></script></body></html>

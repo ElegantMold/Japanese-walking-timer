@@ -62,6 +62,7 @@ let workoutActive = false;
 let isPaused = false;
 let completionRecorded = false;
 let guidanceError = false;
+let guidancePreviewGeneration = 0;
 let displayedMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let completedDates = loadCompletedDates();
 
@@ -189,6 +190,7 @@ function startTicker() {
 }
 
 async function startWorkout() {
+  guidancePreviewGeneration += 1;
   workoutStartedAt = Date.now();
   pausedTotal = 0;
   pausedAt = 0;
@@ -265,6 +267,7 @@ function resetTimerDisplay() {
 }
 
 function stopWorkout() {
+  guidancePreviewGeneration += 1;
   window.clearInterval(timerId);
   elements.routineAudio.pause();
   elements.routineAudio.currentTime = 0;
@@ -287,12 +290,14 @@ function stopWorkout() {
 }
 
 async function testVoice() {
+  const previewGeneration = ++guidancePreviewGeneration;
   elements.voiceButton.disabled = true;
   elements.routineAudio.currentTime = 0;
 
   try {
     await elements.routineAudio.play();
     window.setTimeout(() => {
+      if (previewGeneration !== guidancePreviewGeneration || workoutActive) return;
       elements.routineAudio.pause();
       elements.routineAudio.currentTime = 0;
     }, 2600);
@@ -301,6 +306,7 @@ async function testVoice() {
   }
 
   window.setTimeout(() => {
+    if (previewGeneration !== guidancePreviewGeneration || workoutActive) return;
     elements.voiceButton.disabled = false;
   }, 2800);
 }
