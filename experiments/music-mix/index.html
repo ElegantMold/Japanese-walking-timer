@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <title>Walking music-mix test</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside><strong>Music mixing experiment — not the installed app</strong><p id="mixStatus">Checking browser mixing support…</p><p>Start music first, then test guidance. Mixing may stop working when the screen locks. Music volume and calls remain under iPhone control.</p></aside>
+      <section class="timer-panel" aria-live="polite">
+        <div class="status-row">
+          <span id="phaseBadge" class="phase-badge">Ready</span>
+          <span id="elapsedTime" class="elapsed-time">00:00</span>
+        </div>
+
+        <div class="progress-wrap" aria-hidden="true">
+          <div id="progressRing" class="progress-ring">
+            <div class="progress-core">
+              <span id="timeRemaining" class="time-remaining">35:00</span>
+              <span id="phaseCount" class="phase-count">Warmup + 30 min</span>
+            </div>
+          </div>
+        </div>
+
+        <h1 id="phaseTitle">Japanese Walking Method</h1>
+        <p id="phaseDetail">Start when you are ready. Volume on; locking your screen is okay.</p>
+
+        <div class="controls" role="group" aria-label="Timer controls">
+          <button id="startButton" class="primary-button" type="button">Start</button>
+          <button id="voiceButton" class="secondary-button voice-button" type="button">Test Guidance</button>
+          <button id="pauseButton" class="secondary-button" type="button" disabled>Pause</button>
+          <button id="stopButton" class="secondary-button" type="button" disabled>Stop</button>
+        </div>
+
+        <audio id="routineAudio" src="routine-guidance-samantha-v12.m4a" preload="auto" playsinline></audio>
+      </section>
+
+      <section class="history-panel" aria-labelledby="historyTitle">
+        <div class="history-heading">
+          <div>
+            <p class="eyebrow">Routine history</p>
+            <h2 id="historyTitle">Your walking calendar</h2>
+          </div>
+          <div class="month-controls">
+            <button id="previousMonth" type="button" aria-label="Previous month">←</button>
+            <button id="nextMonth" type="button" aria-label="Next month">→</button>
+          </div>
+        </div>
+        <div class="calendar-month-row">
+          <h3 id="calendarTitle"></h3>
+          <span id="calendarSummary"></span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid" aria-label="Completed walking days"></div>
+        <p class="history-note">A day is marked when all 35 scheduled minutes are complete. History stays on this device.</p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
